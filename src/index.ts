@@ -1,11 +1,15 @@
 import type yParser from 'yargs-parser';
 import prompts from 'prompts';
+import fsExtra from 'fs-extra';
 import { getGitInfo } from './utils/getGitInfo';
 import { dirname, join } from 'path';
 import { pkgUp } from '../compiled/pkg-up';
 import { tryPaths } from './utils/tryPath';
 import BaseGenerator from './utils/baseGenerator';
 import G from 'glob';
+import { existsSync } from 'fs-extra';
+import { installWithNpmClient } from './utils/installWithNpmClient';
+import { exec, spawn } from 'child_process';
 export type NpmClient = 'npm' | 'cnpm' | 'tnpm' | 'yarn' | 'pnpm';
 interface Bootstraptype {
   cwd: string;
@@ -117,7 +121,8 @@ const bootstrap = async ({ args, cwd }: Bootstraptype) => {
   const projectRoot = inMonorepo ? monorepoRoot : target;
 
   // git
-  const shouldInitGit = args.git !== false;
+  // const shouldInitGit = args.git !== false;
+  const shouldInitGit = false;
   // now husky is not supported in monorepo
   const withHusky = shouldInitGit && !inMonorepo;
 
@@ -146,6 +151,35 @@ const bootstrap = async ({ args, cwd }: Bootstraptype) => {
     questions: args.default ? [] : args.plugin ? pluginPrompts : [],
   });
   await generator.run();
+
+  const context = {
+    inMonorepo,
+    target,
+    projectRoot,
+  };
+
+  if (!withHusky) {
+    await removeHusky(context);
+  }
+
+  if (inMonorepo) {
+    // monorepo should move .npmrc to root
+    await moveNpmrc(context);
+  }
+
+  // init git
+  if (shouldInitGit) {
+    await initGit(context);
+  } else {
+    console.info(`Skip Git init`);
+  }
+
+  // install deps
+  if (!args.default && args.install !== false) {
+    installWithNpmClient({ npmClient, cwd: target });
+  } else {
+    console.info(`Skip install deps`);
+  }
 };
 
 async function detectMonorepoRoot(opts: { target: string }) {
@@ -163,6 +197,35 @@ async function detectMonorepoRoot(opts: { target: string }) {
     return rootDir;
   }
   return null;
+}
+
+async function removeHusky(opts: any) {
+  const dir = join(opts.target, './.husky');
+  if (existsSync(dir)) {
+    await fsExtra.remove(dir);
+  }
+}
+
+async function initGit(opts: any) {
+  const { projectRoot } = opts;
+  const isGit = existsSync(join(projectRoot, '.git'));
+  if (isGit) return;
+  const git = spawn('git', ['init'], { cwd: projectRoot });
+  git.stderr.on('data', (data) => {
+    console.error(`Initial the git repo failed`);
+  });
+  git.stdout.on('data', (data) => {
+    console.info('Initial the git success');
+  });
+}
+async function moveNpmrc(opts: any) {
+  const { target, projectRoot } = opts;
+  const sourceNpmrc = join(target, './.npmrc');
+  const targetNpmrc = join(projectRoot, './.npmrc');
+  if (!existsSync(targetNpmrc)) {
+    await fsExtra.copyFile(sourceNpmrc, targetNpmrc);
+  }
+  await fsExtra.remove(sourceNpmrc);
 }
 
 export default bootstrap;
