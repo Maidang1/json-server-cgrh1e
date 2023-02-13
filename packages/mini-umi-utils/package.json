@@ -1,0 +1,24 @@
+{
+  "name": "@maidang606/mini-umi-utils",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "tsc -w"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/execa": "^2.0.0"
+  },
+  "dependencies": {
+    "execa": "^5.1.1",
+    "@maidang606/shared": "workspace:*"
+  },
+  "exports": {
+    "import": "./src/index.ts",
+    "require": "./dist/index.js"
+  },
+  "types": "./dist/index.d.ts"
+}
